@@ -1,0 +1,226 @@
+import React, { useState, useEffect } from 'react';
+import {
+    Box,
+    Button,
+    Table,
+    TableBody,
+    TableCell,
+    TableContainer,
+    TableHead,
+    TableRow,
+    Paper,
+    IconButton,
+    Typography,
+    CircularProgress,
+    Grid,
+    TextField,
+} from '@mui/material';
+import AddIcon from '@mui/icons-material/Add';
+import DeleteIcon from '@mui/icons-material/Delete';
+import { cajaService } from '../../services/caja.service';
+import type { DetArqueoTransferenciaTmp } from '../../types/caja.types';
+
+interface DetArqueoTransferenciasProps {
+    idTerminalWeb: number;
+    onTotalChange?: (total: number) => void;
+    disabled?: boolean;
+}
+
+export const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('es-PY', {
+        style: 'decimal',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+    }).format(value);
+};
+
+const DetArqueoTransferencias: React.FC<DetArqueoTransferenciasProps> = ({
+    idTerminalWeb,
+    onTotalChange,
+    disabled = false,
+}) => {
+    const [items, setItems] = useState<DetArqueoTransferenciaTmp[]>([]);
+    const [concepto, setConcepto] = useState<string>('');
+    const [monto, setMonto] = useState<string>('');
+    const [loading, setLoading] = useState(false);
+    const [saving, setSaving] = useState(false);
+
+    // Cargar datos al montar
+    useEffect(() => {
+        if (idTerminalWeb) {
+            cargarDetalles();
+        }
+    }, [idTerminalWeb]);
+
+    // Notificar total
+    useEffect(() => {
+        const total = items.reduce((sum, item) => sum + item.monto, 0);
+        onTotalChange?.(total);
+    }, [items, onTotalChange]);
+
+    const cargarDetalles = async () => {
+        setLoading(true);
+        try {
+            const response = await cajaService.listarDetArqueoTransferenciaTmp(idTerminalWeb);
+            if (response.success) {
+                setItems(response.result || []);
+            }
+        } catch (error) {
+            console.error('Error al cargar transferencias:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleAgregar = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!concepto.trim() || !monto || parseFloat(monto) <= 0) return;
+
+        setSaving(true);
+        try {
+            const response = await cajaService.agregarDetArqueoTransferenciaTmp(
+                idTerminalWeb,
+                concepto.trim(),
+                parseFloat(monto)
+            );
+            if (response.success) {
+                setConcepto('');
+                setMonto('');
+                await cargarDetalles();
+            }
+        } catch (error: any) {
+            console.error('Error al agregar transferencia:', error);
+            alert(error.response?.data?.message || 'Error al agregar transferencia');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleEliminar = async (concepto: string) => {
+        setSaving(true);
+        try {
+            const response = await cajaService.eliminarDetArqueoTransferenciaTmp(idTerminalWeb, concepto);
+            if (response.success) {
+                await cargarDetalles();
+            }
+        } catch (error: any) {
+            console.error('Error al eliminar transferencia:', error);
+            alert(error.response?.data?.message || 'Error al eliminar transferencia');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const totalTransferencias = items.reduce((sum, item) => sum + item.monto, 0);
+
+    if (loading) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                <CircularProgress />
+            </Box>
+        );
+    }
+
+    return (
+        <Box>
+            {/* Formulario de entrada */}
+            {!disabled && (
+                <Box component="form" onSubmit={handleAgregar} sx={{ mb: 3 }}>
+                    <Grid container spacing={2} alignItems="center">
+                        <Grid item xs={12} sm={5}>
+                            <TextField
+                                fullWidth
+                                label="Concepto (e.g. Banco Atlas)"
+                                size="small"
+                                required
+                                value={concepto}
+                                onChange={(e) => setConcepto(e.target.value)}
+                                inputProps={{ maxLength: 50 }}
+                            />
+                        </Grid>
+                        <Grid item xs={12} sm={4}>
+                            <TextField
+                                fullWidth
+                                label="Monto (Gs.)"
+                                size="small"
+                                type="number"
+                                required
+                                value={monto}
+                                onChange={(e) => setMonto(e.target.value)}
+                                inputProps={{ min: 1 }}
+                            />
+                        </Grid>
+                        <Grid item xs={12} sm={3}>
+                            <Button
+                                fullWidth
+                                variant="contained"
+                                color="primary"
+                                type="submit"
+                                startIcon={<AddIcon />}
+                                disabled={saving || !concepto.trim() || !monto}
+                            >
+                                Registrar
+                            </Button>
+                        </Grid>
+                    </Grid>
+                </Box>
+            )}
+
+            {/* Tabla de registrados */}
+            <TableContainer component={Paper} sx={{ maxHeight: 250 }}>
+                <Table size="small" stickyHeader>
+                    <TableHead>
+                        <TableRow>
+                            <TableCell sx={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Concepto</TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 'bold', backgroundColor: '#f5f5f5' }}>Monto</TableCell>
+                            {!disabled && <TableCell align="center" sx={{ fontWeight: 'bold', backgroundColor: '#f5f5f5', width: 60 }}></TableCell>}
+                        </TableRow>
+                    </TableHead>
+                    <TableBody>
+                        {items.map((item, idx) => (
+                            <TableRow key={`${item.concepto}-${idx}`} hover>
+                                <TableCell>{item.concepto}</TableCell>
+                                <TableCell align="right">
+                                    <Typography variant="body2" fontWeight="bold" color="primary.main">
+                                        Gs. {formatCurrency(item.monto)}
+                                    </Typography>
+                                </TableCell>
+                                {!disabled && (
+                                    <TableCell align="center">
+                                        <IconButton
+                                            size="small"
+                                            color="error"
+                                            onClick={() => handleEliminar(item.concepto)}
+                                            disabled={saving}
+                                        >
+                                            <DeleteIcon fontSize="small" />
+                                        </IconButton>
+                                    </TableCell>
+                                )}
+                            </TableRow>
+                        ))}
+                        {items.length === 0 && (
+                            <TableRow>
+                                <TableCell colSpan={disabled ? 2 : 3} align="center" sx={{ py: 3 }}>
+                                    <Typography color="text.secondary" variant="body2">
+                                        No se han registrado transferencias bancarias.
+                                    </Typography>
+                                </TableCell>
+                            </TableRow>
+                        )}
+                    </TableBody>
+                </Table>
+            </TableContainer>
+
+            {/* Total */}
+            <Paper sx={{ p: 1.5, mt: 2, backgroundColor: '#e3f2fd', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="subtitle2" color="text.secondary">Total Transf.:</Typography>
+                <Typography variant="h6" fontWeight="bold" color="primary.dark">
+                    Gs. {formatCurrency(totalTransferencias)}
+                </Typography>
+            </Paper>
+        </Box>
+    );
+};
+
+export default DetArqueoTransferencias;
