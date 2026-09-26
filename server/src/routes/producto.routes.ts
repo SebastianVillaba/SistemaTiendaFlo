@@ -2,7 +2,7 @@ import express from 'express';
 import multer from 'multer'
 import path from 'path';
 
-import { insertarProducto, buscarProductos, obtenerInfoProducto, obtenerTiposProducto, consultarPrecioProducto, modificarProducto, obtenerPrecioDescuento, insertarTipoProducto, consultarStockProducto } from '../controllers/producto.controller';
+import { insertarProducto, buscarProductos, obtenerInfoProducto, obtenerTiposProducto, consultarPrecioProducto, modificarProducto, obtenerPrecioDescuento, insertarTipoProducto, consultarStockProducto, obtenerTalles, obtenerColores, insertarTalle, insertarColor } from '../controllers/producto.controller';
 import { cargarReferenciasTmp, obtenerDetallesTmp, agregarDetalleTmp, eliminarDetalleTmp, guardarReferencias, limpiarTemporal, obtenerSugeridosProductoRef } from '../controllers/productoRef.controller';
 
 const router = express.Router();
@@ -37,6 +37,10 @@ router.get('/consulta', buscarProductos);
 router.get('/info', obtenerInfoProducto);
 router.get('/tipoProducto', obtenerTiposProducto);
 router.post('/tipoProducto', insertarTipoProducto);
+router.get('/talle', obtenerTalles);
+router.post('/talle', insertarTalle);
+router.get('/color', obtenerColores);
+router.post('/color', insertarColor);
 router.get('/precio', consultarPrecioProducto);
 router.get('/precioDescuento', obtenerPrecioDescuento);
 router.get('/stock', consultarStockProducto);

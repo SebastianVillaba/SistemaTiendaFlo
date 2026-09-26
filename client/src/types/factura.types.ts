@@ -19,7 +19,6 @@ export interface ItemFactura {
   nro?: number;
   nombreMercaderia?: string;
   descripcion?: string;
-  origen: string;
   unidades: number;
   precioUnitario?: number;
   descuento: number;

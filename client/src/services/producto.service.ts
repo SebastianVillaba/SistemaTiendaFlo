@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { Producto, TipoProducto } from '../types/producto.types';
+import type { Producto, TipoProducto, Talle, Color } from '../types/producto.types';
 
 // URL base del API - ajusta según tu configuración
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
@@ -28,13 +28,14 @@ interface InsertarProductoResponse {
 interface ProductoInfo {
   idProducto: number;
   nombre: string;
-  presentacion: string;
   codigo: string;
   codigoBarra: string;
   precio: number;
   costo: number;
   idTipoProducto: number;
-  gasto: boolean;
+  idTalle: number;
+  idColor: number;
+  activo: boolean;
   idImpuesto: number;
   imagenUrl?: string;
 }
@@ -147,6 +148,66 @@ export const productoService = {
     } catch (error: any) {
       console.error('Error al obtener tipos de producto:', error);
       throw new Error('Error al obtener tipos de producto');
+    }
+  },
+
+  /**
+   * Obtiene la lista de talles
+   * @returns Lista de talles
+   */
+  obtenerTalles: async (): Promise<Talle[]> => {
+    try {
+      const response = await axios.get<Talle[]>(`${API_BASE_URL}/producto/talle`);
+      return response.data;
+    } catch (error: any) {
+      console.error('Error al obtener talles:', error);
+      throw new Error('Error al obtener talles');
+    }
+  },
+
+  /**
+   * Obtiene la lista de colores
+   * @returns Lista de colores
+   */
+  obtenerColores: async (): Promise<Color[]> => {
+    try {
+      const response = await axios.get<Color[]>(`${API_BASE_URL}/producto/color`);
+      return response.data;
+    } catch (error: any) {
+      console.error('Error al obtener colores:', error);
+      throw new Error('Error al obtener colores');
+    }
+  },
+
+  /**
+   * Crea un nuevo talle (creación rápida)
+   * @returns Respuesta del servidor con el idTalle generado
+   */
+  insertarTalle: async (nombre: string, idUsuarioAlta: number): Promise<{ success: boolean; message: string; idTalle?: number }> => {
+    try {
+      const response = await axios.post(`${API_BASE_URL}/producto/talle`, { nombre, idUsuarioAlta });
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.data) {
+        throw new Error(error.response.data.message || 'Error al insertar el talle');
+      }
+      throw new Error('Error de conexión con el servidor');
+    }
+  },
+
+  /**
+   * Crea un nuevo color (creación rápida)
+   * @returns Respuesta del servidor con el idColor generado
+   */
+  insertarColor: async (nombre: string, idUsuarioAlta: number): Promise<{ success: boolean; message: string; idColor?: number }> => {
+    try {
+      const response = await axios.post(`${API_BASE_URL}/producto/color`, { nombre, idUsuarioAlta });
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.data) {
+        throw new Error(error.response.data.message || 'Error al insertar el color');
+      }
+      throw new Error('Error de conexión con el servidor');
     }
   },
 

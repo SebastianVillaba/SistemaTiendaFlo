@@ -20,12 +20,28 @@ import {
 } from '@mui/material';
 import TextField from '../UppercaseTextField';
 import { useState, useEffect, useRef } from 'react';
-import type { Producto, TipoProducto } from '../../types/producto.types';
+import type { Producto, TipoProducto, Talle, Color } from '../../types/producto.types';
 import { productoService } from '../../services/producto.service';
 import { impuestoService } from '../../services/impuesto.service';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
+
+type QuickCreateTipo = 'tipoProducto' | 'talle' | 'color';
+
+const QUICK_CREATE_CONFIG: Record<QuickCreateTipo, { nombre: string; titulo: string; label: string; maxLength: number }> = {
+  tipoProducto: { nombre: 'tipo de producto', titulo: 'Crear Tipo de Producto Rápido', label: 'Nombre del Tipo de Producto', maxLength: 30 },
+  talle: { nombre: 'talle', titulo: 'Crear Talle Rápido', label: 'Nombre del Talle', maxLength: 25 },
+  color: { nombre: 'color', titulo: 'Crear Color Rápido', label: 'Nombre del Color', maxLength: 25 },
+};
+
+const quickCreateButtonSx = {
+  backgroundColor: 'action.hover',
+  '&:hover': {
+    backgroundColor: 'primary.light',
+    color: 'primary.contrastText',
+  }
+};
 
 interface ProductoFormProps {
   formData: Producto;
@@ -37,6 +53,8 @@ export default function ProductoForm({ formData, setFormData, guardarRef }: Prod
   const [tiposProducto, setTiposProducto] = useState<TipoProducto[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [impuestos, setImpuestos] = useState<any[]>([]);
+  const [talles, setTalles] = useState<Talle[]>([]);
+  const [colores, setColores] = useState<Color[]>([]);
 
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -44,11 +62,12 @@ export default function ProductoForm({ formData, setFormData, guardarRef }: Prod
 
   // States for Quick Create Tipo Producto Modal
   const nombreRef = useRef<HTMLInputElement>(null);
-  const presentacionRef = useRef<HTMLInputElement>(null);
   const codigoRef = useRef<HTMLInputElement>(null);
   const codigoBarraRef = useRef<HTMLInputElement>(null);
   const precioRef = useRef<HTMLInputElement>(null);
   const tipoProductoRef = useRef<HTMLInputElement>(null);
+  const talleRef = useRef<HTMLInputElement>(null);
+  const colorRef = useRef<HTMLInputElement>(null);
   const impuestoRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -58,7 +77,8 @@ export default function ProductoForm({ formData, setFormData, guardarRef }: Prod
     }, 100);
   }, []);
 
-  const [openQuickCreate, setOpenQuickCreate] = useState<boolean>(false);
+  // Creación rápida de Tipo de Producto / Talle / Color (null = cerrado)
+  const [quickCreate, setQuickCreate] = useState<QuickCreateTipo | null>(null);
   const [quickCreateNombre, setQuickCreateNombre] = useState<string>('');
   const [quickCreateError, setQuickCreateError] = useState<string>('');
   const [quickCreateLoading, setQuickCreateLoading] = useState<boolean>(false);
@@ -145,17 +165,60 @@ export default function ProductoForm({ formData, setFormData, guardarRef }: Prod
     }
   };
 
-  const handleOpenQuickCreate = () => {
+  const fetchTalles = async (): Promise<Talle[]> => {
+    const lista = await productoService.obtenerTalles();
+    setTalles(lista);
+    return lista;
+  };
+
+  const fetchColores = async (): Promise<Color[]> => {
+    const lista = await productoService.obtenerColores();
+    setColores(lista);
+    return lista;
+  };
+
+  const handleOpenQuickCreate = (tipo: QuickCreateTipo) => {
     setQuickCreateNombre('');
     setQuickCreateError('');
-    setOpenQuickCreate(true);
+    setQuickCreate(tipo);
   };
 
   const handleCloseQuickCreate = () => {
-    setOpenQuickCreate(false);
+    setQuickCreate(null);
+  };
+
+  /**
+   * Crea el registro, refresca el combo y deja seleccionado el nuevo valor.
+   */
+  const crearYSeleccionar = async (tipo: QuickCreateTipo, nombre: string): Promise<void> => {
+    // Usamos el ID de usuario 1 como default (o el que corresponda)
+    const idUsuario = 1;
+    const mismoNombre = (valor: string) => valor.trim().toUpperCase() === nombre.toUpperCase();
+
+    if (tipo === 'tipoProducto') {
+      const response = await productoService.insertarTipoProducto(nombre, idUsuario);
+      if (!response.success) throw new Error(response.message || 'Error al crear el tipo de producto');
+      // Buscar el tipo recién creado en la lista actualizada (case insensitive)
+      const creado = (await fetchTiposProducto()).find((t) => mismoNombre(t.nombreTipo));
+      if (creado) setFormData((prev) => ({ ...prev, idTipoProducto: creado.idTipoProducto }));
+    } else if (tipo === 'talle') {
+      const response = await productoService.insertarTalle(nombre, idUsuario);
+      if (!response.success) throw new Error(response.message || 'Error al crear el talle');
+      const lista = await fetchTalles();
+      const idTalle = response.idTalle ?? lista.find((t) => mismoNombre(t.nombreTalle))?.idTalle;
+      if (idTalle) setFormData((prev) => ({ ...prev, idTalle }));
+    } else {
+      const response = await productoService.insertarColor(nombre, idUsuario);
+      if (!response.success) throw new Error(response.message || 'Error al crear el color');
+      const lista = await fetchColores();
+      const idColor = response.idColor ?? lista.find((c) => mismoNombre(c.nombreColor))?.idColor;
+      if (idColor) setFormData((prev) => ({ ...prev, idColor }));
+    }
   };
 
   const handleSaveQuickCreate = async () => {
+    if (!quickCreate) return;
+
     if (!quickCreateNombre.trim()) {
       setQuickCreateError('El nombre es obligatorio');
       return;
@@ -165,35 +228,11 @@ export default function ProductoForm({ formData, setFormData, guardarRef }: Prod
     setQuickCreateError('');
 
     try {
-      // Usamos el ID de usuario 1 como default (o el que corresponda)
-      const response = await productoService.insertarTipoProducto(
-        quickCreateNombre.trim(),
-        1
-      );
-
-      if (response.success) {
-        // Refrescar lista de tipos de producto
-        const updatedTipos = await fetchTiposProducto();
-        
-        // Buscar el tipo recién creado en la lista actualizada (case insensitive)
-        const createdType = updatedTipos.find(
-          (t) => t.nombreTipo.trim().toUpperCase() === quickCreateNombre.trim().toUpperCase()
-        );
-
-        if (createdType) {
-          setFormData((prev) => ({
-            ...prev,
-            idTipoProducto: createdType.idTipoProducto,
-          }));
-        }
-
-        handleCloseQuickCreate();
-      } else {
-        setQuickCreateError(response.message || 'Error al crear el tipo de producto');
-      }
+      await crearYSeleccionar(quickCreate, quickCreateNombre.trim());
+      handleCloseQuickCreate();
     } catch (err: any) {
-      console.error('Error al crear tipo de producto rápido:', err);
-      setQuickCreateError(err.message || 'Error al crear el tipo de producto');
+      console.error(`Error al crear ${QUICK_CREATE_CONFIG[quickCreate].nombre} rápido:`, err);
+      setQuickCreateError(err.message || `Error al crear el ${QUICK_CREATE_CONFIG[quickCreate].nombre}`);
     } finally {
       setQuickCreateLoading(false);
     }
@@ -212,8 +251,17 @@ export default function ProductoForm({ formData, setFormData, guardarRef }: Prod
       }
     }
 
+    const fetchTallesColores = async () => {
+      try {
+        await Promise.all([fetchTalles(), fetchColores()]);
+      } catch (error) {
+        console.error('Error al cargar talles y colores:', error);
+      }
+    }
+
     fetchTiposProducto();
     fetchImpuesto();
+    fetchTallesColores();
   }, []);
 
   const handleChange = (field: keyof Producto) => (
@@ -275,36 +323,26 @@ export default function ProductoForm({ formData, setFormData, guardarRef }: Prod
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault();
-                    presentacionRef.current?.focus();
+                    codigoRef.current?.focus();
                   }
                 }}
               />
             </Stack>
 
-            {/* Fila 2: Presentación y Código */}
+            {/* Fila 2: Código */}
             <Stack direction="row" spacing={2}>
               <TextField
                 fullWidth
-                label="Presentación"
-                value={formData.presentacion}
-                onChange={handleChange('presentacion')}
-                size="small"
-                helperText={!formData.presentacion}
-                inputRef={presentacionRef}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    codigoRef.current?.focus();
-                  }
-                }}
-              />
-              <TextField
-                fullWidth
                 label="Código"
-                value={formData.codigo}
-                onChange={handleChange('codigo')}
+                value={formData.codigo ?? ''}
+                onChange={(e) => {
+                  // Solo dígitos, hasta 11 (columna decimal(11,0))
+                  const codigo = e.target.value.replace(/\D/g, '').slice(0, 11);
+                  setFormData((prev) => ({ ...prev, codigo }));
+                }}
                 size="small"
-                helperText={''}
+                helperText="Hasta 11 dígitos. Vacío = automático"
+                inputProps={{ inputMode: 'numeric', maxLength: 11 }}
                 inputRef={codigoRef}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
@@ -365,7 +403,7 @@ export default function ProductoForm({ formData, setFormData, guardarRef }: Prod
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       e.preventDefault();
-                      impuestoRef.current?.focus();
+                      talleRef.current?.focus();
                     }
                   }}
                 >
@@ -376,24 +414,80 @@ export default function ProductoForm({ formData, setFormData, guardarRef }: Prod
                   ))}
                 </Select>
               </FormControl>
-              <IconButton 
-                color="primary" 
-                onClick={handleOpenQuickCreate}
+              <IconButton
+                color="primary"
+                onClick={() => handleOpenQuickCreate('tipoProducto')}
                 disabled={loading}
                 title="Crear tipo de producto rápido"
-                sx={{ 
-                  backgroundColor: 'action.hover',
-                  '&:hover': {
-                    backgroundColor: 'primary.light',
-                    color: 'primary.contrastText',
-                  }
-                }}
+                sx={quickCreateButtonSx}
               >
                 <AddIcon />
               </IconButton>
             </Box>
 
-            {/* Fila 6: Impuesto */}
+            {/* Fila 6: Talle y Color */}
+            <Stack direction="row" spacing={1} alignItems="center">
+              <FormControl fullWidth size="small" required error={!formData.idTalle}>
+                <InputLabel>Talle</InputLabel>
+                <Select
+                  value={formData.idTalle || ''}
+                  onChange={handleChange('idTalle')}
+                  label="Talle"
+                  inputRef={talleRef}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      colorRef.current?.focus();
+                    }
+                  }}
+                >
+                  {talles.map((talle) => (
+                    <MenuItem key={talle.idTalle} value={talle.idTalle}>
+                      {talle.nombreTalle}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <IconButton
+                color="primary"
+                onClick={() => handleOpenQuickCreate('talle')}
+                title="Crear talle rápido"
+                sx={quickCreateButtonSx}
+              >
+                <AddIcon />
+              </IconButton>
+              <FormControl fullWidth size="small" required error={!formData.idColor}>
+                <InputLabel>Color</InputLabel>
+                <Select
+                  value={formData.idColor || ''}
+                  onChange={handleChange('idColor')}
+                  label="Color"
+                  inputRef={colorRef}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      impuestoRef.current?.focus();
+                    }
+                  }}
+                >
+                  {colores.map((color) => (
+                    <MenuItem key={color.idColor} value={color.idColor}>
+                      {color.nombreColor}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <IconButton
+                color="primary"
+                onClick={() => handleOpenQuickCreate('color')}
+                title="Crear color rápido"
+                sx={quickCreateButtonSx}
+              >
+                <AddIcon />
+              </IconButton>
+            </Stack>
+
+            {/* Fila 7: Impuesto */}
             <FormControl fullWidth size="small">
               <InputLabel>Impuesto</InputLabel>
               <Select
@@ -417,18 +511,8 @@ export default function ProductoForm({ formData, setFormData, guardarRef }: Prod
               </Select>
             </FormControl>
 
-            {/* Fila 7: Checkboxes */}
+            {/* Fila 8: Activo */}
             <Stack direction="row" spacing={2}>
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={formData.gasto || false}
-                    onChange={handleChange('gasto')}
-                    name="gasto"
-                  />
-                }
-                label="Es Gasto"
-              />
               <FormControlLabel
                 control={
                   <Checkbox
@@ -440,22 +524,6 @@ export default function ProductoForm({ formData, setFormData, guardarRef }: Prod
                 label="Activo"
               />
             </Stack>
-
-            {/* Fila 8: Origen */}
-            <FormControl fullWidth size="small">
-              <InputLabel>Origen</InputLabel>
-              <Select
-                value={formData.origen ? 1 : 0}
-                label="Origen"
-                onChange={(e) => {
-                  const val = Number(e.target.value);
-                  setFormData(prev => ({ ...prev, origen: val === 1 }));
-                }}
-              >
-                <MenuItem value={0}>Importado</MenuItem>
-                <MenuItem value={1}>Nacional</MenuItem>
-              </Select>
-            </FormControl>
           </Stack>
         </Box>
 
@@ -578,14 +646,14 @@ export default function ProductoForm({ formData, setFormData, guardarRef }: Prod
         </Box>
       </Box>
 
-      {/* Dialogo para creacion rapida de Tipo de Producto */}
-      <Dialog 
-        open={openQuickCreate} 
+      {/* Dialogo para creacion rapida de Tipo de Producto / Talle / Color */}
+      <Dialog
+        open={quickCreate !== null}
         onClose={handleCloseQuickCreate}
         maxWidth="xs"
         fullWidth
       >
-        <DialogTitle sx={{ fontWeight: 600 }}>Crear Tipo de Producto Rápido</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 600 }}>{quickCreate && QUICK_CREATE_CONFIG[quickCreate].titulo}</DialogTitle>
         <DialogContent>
           {quickCreateError && (
             <Alert severity="error" sx={{ mb: 2 }}>
@@ -595,14 +663,14 @@ export default function ProductoForm({ formData, setFormData, guardarRef }: Prod
           <MuiTextField
             autoFocus
             margin="dense"
-            label="Nombre del Tipo de Producto"
+            label={quickCreate ? QUICK_CREATE_CONFIG[quickCreate].label : ''}
             type="text"
             fullWidth
             variant="outlined"
             value={quickCreateNombre}
             onChange={(e) => setQuickCreateNombre(e.target.value.toUpperCase())}
             disabled={quickCreateLoading}
-            inputProps={{ maxLength: 30, style: { textTransform: 'uppercase' } }}
+            inputProps={{ maxLength: quickCreate ? QUICK_CREATE_CONFIG[quickCreate].maxLength : 30, style: { textTransform: 'uppercase' } }}
             onKeyPress={(e) => {
               if (e.key === 'Enter') {
                 handleSaveQuickCreate();

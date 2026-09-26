@@ -30,7 +30,6 @@ export interface ProductoResultado {
   costo?: number;
   stock: number;
   nombreImpuesto: string;
-  origen: string;
   idStock: number;
 }
 
@@ -393,9 +392,6 @@ const SearchProductModal: React.FC<SearchProductModalProps> = ({
                       <TableCell>
                         <Typography variant="body2">
                           {producto.nombreMercaderia}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {producto.origen === 'N' ? 'Nacional' : 'Importado'}
                         </Typography>
                       </TableCell>
                       <TableCell>

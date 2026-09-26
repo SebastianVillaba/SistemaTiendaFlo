@@ -1,13 +1,12 @@
 export interface InsertarProductoRequest {
   nombre?: string;
-  presentacion?: string;
-  codigo?: number;
+  codigo?: number | string;
   codigoBarra?: string;
   precio?: number;
-  origen?: boolean;
   idUsuarioAlta?: number;
   idTipoProducto?: number;
-  gasto?: boolean;
+  idTalle?: number;
+  idColor?: number;
   activo?: boolean;
   idImpuesto?: number;
   imagenUrl?: string;
@@ -27,20 +26,24 @@ export interface BuscarProductoRequest {
 export interface ModificarProductoRequest {
   idProducto: number;
   nombre: string;
-  presentacion?: string;
-  codigo?: number;
+  codigo?: number | string;
   codigoBarra?: string;
   precio?: number;
-  origen?: number;
   idUsuarioMod: number;
   idTipoProducto?: number;
-  gasto?: boolean;
+  idTalle?: number;
+  idColor?: number;
   activo?: boolean;
   idImpuesto?: number;
   imagenUrl?: string;
 }
 
 export interface InsertarTipoProductoRequest {
+  nombre: string;
+  idUsuarioAlta: number;
+}
+
+export interface InsertarTalleColorRequest {
   nombre: string;
   idUsuarioAlta: number;
 }

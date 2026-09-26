@@ -31,6 +31,19 @@ import ProductoForm from '../../components/Producto/ProductoForm';
 import { useTerminal } from '../../hooks/useTerminal';
 import ProductosReferenciadosTab from '../../components/Producto/ProductosReferenciadosTab';
 
+const productoVacio: Producto = {
+  nombre: '',
+  codigo: '',
+  codigoBarra: '',
+  precio: 0,
+  costo: 0,
+  idTipoProducto: 1,
+  idTalle: 0,
+  idColor: 0,
+  idUsuarioAlta: 1, // TODO: Obtener del usuario logueado
+  idImpuesto: 2,
+  imagenUrl: '',
+};
 
 export default function ProductosABM(): JSX.Element {
   const { idTerminalWeb } = useTerminal();
@@ -44,20 +57,7 @@ export default function ProductosABM(): JSX.Element {
   const guardarRef = useRef<HTMLButtonElement>(null);
 
 
-  const [formData, setFormData] = useState<Producto>({
-    nombre: '',
-    presentacion: '',
-    codigo: '',
-    codigoBarra: '',
-    precio: 0,
-    costo: 0,
-    idTipoProducto: 1,
-    idUsuarioAlta: 1, // TODO: Obtener sdel usuario logueado
-    gasto: false,
-    idImpuesto: 2,
-    origen: false,
-    imagenUrl: '',
-  });
+  const [formData, setFormData] = useState<Producto>(productoVacio);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
 
@@ -97,16 +97,15 @@ export default function ProductosABM(): JSX.Element {
       const productoMapeado: Producto = {
         idProducto: infoCompleta.idProducto,
         nombre: infoCompleta.nombre,
-        presentacion: infoCompleta.presentacion,
-        codigo: infoCompleta.codigo,
+        codigo: infoCompleta.codigo != null ? String(infoCompleta.codigo) : '',
         codigoBarra: infoCompleta.codigoBarra,
         precio: infoCompleta.precio,
         costo: infoCompleta.costo,
         idTipoProducto: infoCompleta.idTipoProducto,
-        gasto: infoCompleta.gasto || false,
+        idTalle: infoCompleta.idTalle || 0,
+        idColor: infoCompleta.idColor || 0,
         idImpuesto: infoCompleta.idImpuesto || 0,
-        origen: infoCompleta.origen || false, 
-        activo: infoCompleta.activo || true,
+        activo: infoCompleta.activo ?? true,
         imagenUrl: infoCompleta.imagenUrl || ''
       };
 
@@ -127,20 +126,7 @@ export default function ProductosABM(): JSX.Element {
     setIsNewMode(true);
     setSelectedProducto(null);
     setError('');
-    setFormData({
-      nombre: '',
-      presentacion: '',
-      codigo: '',
-      codigoBarra: '',
-      precio: 0,
-      costo: 0,
-      idTipoProducto: 1,
-      idUsuarioAlta: 1, // TODO: Obtener del usuario logueado
-      gasto: false,
-      idImpuesto: 2,
-      origen: false,
-      imagenUrl: '',
-    });
+    setFormData(productoVacio);
   };
 
   const handleSave = async () => {
@@ -163,6 +149,16 @@ export default function ProductosABM(): JSX.Element {
     // 6. Validar tipo de producto seleccionado
     if (!formData.idTipoProducto || formData.idTipoProducto <= 0) {
       setError('Debe seleccionar un tipo de producto');
+      return;
+    }
+
+    if (!formData.idTalle || formData.idTalle <= 0) {
+      setError('Debe seleccionar un talle');
+      return;
+    }
+
+    if (!formData.idColor || formData.idColor <= 0) {
+      setError('Debe seleccionar un color');
       return;
     }
 
@@ -214,20 +210,7 @@ export default function ProductosABM(): JSX.Element {
     setIsNewMode(false);
     setSelectedProducto(null);
     setError('');
-    setFormData({
-      nombre: '',
-      presentacion: '',
-      codigo: '',
-      codigoBarra: '',
-      precio: 0,
-      costo: 0,
-      idTipoProducto: 1,
-      idUsuarioAlta: 1,
-      gasto: false,
-      idImpuesto: 2,
-      origen: false,
-      imagenUrl: '',
-    });
+    setFormData(productoVacio);
   };
 
 

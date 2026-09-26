@@ -1,7 +1,20 @@
 import { Request, Response } from "express";
 import { executeRequest, sql } from "../utils/dbHandler";
-import { InsertarProductoRequest, InsertarProductoResponse, BuscarProductoRequest, ModificarProductoRequest, InsertarTipoProductoRequest } from "../types/producto/producto.type";
+import { InsertarProductoRequest, InsertarProductoResponse, BuscarProductoRequest, ModificarProductoRequest, InsertarTipoProductoRequest, InsertarTalleColorRequest } from "../types/producto/producto.type";
 import { flattenError } from "zod";
+
+const MENSAJE_CODIGO_INVALIDO = "El código debe ser numérico de hasta 11 dígitos";
+
+/**
+ * Convierte el código del producto (columna decimal(11,0)) a número.
+ * Vacío equivale a 0 (el SP genera el código automáticamente). Devuelve null si es inválido.
+ */
+const parseCodigo = (codigo: unknown): number | null => {
+  const texto = String(codigo ?? '').trim();
+  if (texto === '') return 0;
+  if (!/^\d{1,11}$/.test(texto)) return null;
+  return Number(texto);
+};
 
 /**
  * Controller para insertar una nueva persona en el sistema.
@@ -16,14 +29,13 @@ export const insertarProducto = async (req: Request, res: Response): Promise<voi
     // Usamos destructuring para obtener cada campo del objeto req.body
     const {
       nombre,
-      presentacion,
       codigo,
       codigoBarra,
       precio,
       idUsuarioAlta,
       idTipoProducto,
-      gasto,
-      origen,
+      idTalle,
+      idColor,
       activo,
       idImpuesto,
       imagenUrl
@@ -39,21 +51,34 @@ export const insertarProducto = async (req: Request, res: Response): Promise<voi
       return;
     }
 
+    if (!idTalle || !idColor) {
+      res.status(400).json({
+        success: false,
+        message: "El talle y el color son obligatorios"
+      });
+      return;
+    }
+
+    const codigoNum = parseCodigo(codigo);
+    if (codigoNum === null) {
+      res.status(400).json({ success: false, message: MENSAJE_CODIGO_INVALIDO });
+      return;
+    }
+
     // PASO 5: Preparar los parámetros para el stored procedure
     const inputs = [
-      { name: 'nombre', type: sql.VarChar, value: nombre },
-      { name: 'presentacion', type: sql.VarChar, value: presentacion || '' },
-      { name: 'codigo', type: sql.Int, value: codigo || 0 },
+      { name: 'nombre', type: sql.VarChar(100), value: nombre },
+      { name: 'codigo', type: sql.Decimal(11, 0), value: codigoNum },
       { name: 'codigoBarra', type: sql.VarChar, value: codigoBarra || '' },
       { name: 'precio', type: sql.Money, value: precio || 0 },
       // Costo se maneja por Stock Inicial
       { name: 'idUsuarioAlta', type: sql.Int, value: idUsuarioAlta },
       { name: 'idTipoProducto', type: sql.Int, value: idTipoProducto || 0 },
-      { name: 'gasto', type: sql.Bit, value: gasto || false },
-      { name: 'origen', type: sql.Bit, value: origen || false },
       { name: 'activo', type: sql.Bit, value: activo !== undefined ? activo : true },
       { name: 'idImpuesto', type: sql.Int, value: idImpuesto || 0 },
       { name: 'imagenUrl', type: sql.VarChar, value: imagenUrl || '' },
+      { name: 'idTalle', type: sql.Int, value: idTalle },
+      { name: 'idColor', type: sql.Int, value: idColor },
     ];
 
     const result = await executeRequest({
@@ -175,6 +200,94 @@ export const obtenerTiposProducto = async (req: Request, res: Response): Promise
 };
 
 /**
+ * Controller para obtener talles
+ */
+export const obtenerTalles = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const result = await executeRequest({
+      query: 'select idTalle, nombreTalle from talle order by nombreTalle',
+      isStoredProcedure: false
+    });
+
+    res.status(200).json(result.recordset);
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: "Error al obtener talles",
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Controller para obtener colores
+ */
+export const obtenerColores = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const result = await executeRequest({
+      query: 'select idColor, nombreColor from color order by nombreColor',
+      isStoredProcedure: false
+    });
+
+    res.status(200).json(result.recordset);
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: "Error al obtener colores",
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Inserta un talle o color (creación rápida desde el ABM de productos)
+ */
+const insertarTalleColor = (sp: string, entidad: string, campoId: string) =>
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { nombre, idUsuarioAlta } = req.body as InsertarTalleColorRequest;
+
+      if (!nombre || !nombre.trim()) {
+        res.status(400).json({ success: false, message: "El nombre es obligatorio" });
+        return;
+      }
+
+      if (!idUsuarioAlta) {
+        res.status(400).json({ success: false, message: "El usuario de alta es obligatorio" });
+        return;
+      }
+
+      const result = await executeRequest({
+        query: sp,
+        inputs: [
+          { name: 'nombre', type: sql.VarChar(25), value: nombre.trim() },
+          { name: 'idUsuarioAlta', type: sql.Int, value: idUsuarioAlta }
+        ] as any,
+        isStoredProcedure: true
+      });
+
+      res.status(201).json({
+        success: true,
+        message: `${entidad} insertado exitosamente`,
+        [campoId]: result.recordset?.[0]?.[campoId]
+      });
+    } catch (error: any) {
+      if ([50000, 50001].includes(error.number)) {
+        res.status(400).json({ success: false, message: error.message });
+      } else {
+        res.status(500).json({
+          success: false,
+          message: `Error interno del servidor al insertar el ${entidad.toLowerCase()}.`,
+          error: error.message
+        });
+      }
+    }
+  };
+
+export const insertarTalle = insertarTalleColor('sp_insertarTalle', 'Talle', 'idTalle');
+export const insertarColor = insertarTalleColor('sp_insertarColor', 'Color', 'idColor');
+
+/**
  * Controller para consultar precio de producto
  * Ejecuta sp_consultaPrecioProducto que busca por código, código de barra o nombre
  */
@@ -287,14 +400,13 @@ export const modificarProducto = async (req: Request, res: Response): Promise<vo
     const {
       idProducto,
       nombre,
-      presentacion,
       codigo,
       codigoBarra,
       precio,
-      origen,
       idUsuarioMod,
       idTipoProducto,
-      gasto,
+      idTalle,
+      idColor,
       activo,
       idImpuesto,
       imagenUrl
@@ -309,18 +421,31 @@ export const modificarProducto = async (req: Request, res: Response): Promise<vo
       return;
     }
 
+    if (!idTalle || !idColor) {
+      res.status(400).json({
+        success: false,
+        message: "El talle y el color son obligatorios"
+      });
+      return;
+    }
+
+    const codigoNum = parseCodigo(codigo);
+    if (codigoNum === null) {
+      res.status(400).json({ success: false, message: MENSAJE_CODIGO_INVALIDO });
+      return;
+    }
+
     const inputs = [
       { name: 'idProducto', type: sql.Int, value: idProducto },
       { name: 'nombre', type: sql.VarChar(100), value: nombre },
-      { name: 'presentacion', type: sql.VarChar(30), value: presentacion || '' },
-      { name: 'codigo', type: sql.Int, value: codigo || 0 },
+      { name: 'codigo', type: sql.Decimal(11, 0), value: codigoNum },
       { name: 'codigoBarra', type: sql.VarChar(30), value: codigoBarra || '' },
       { name: 'precio', type: sql.Money, value: precio || 0 },
       // Costo no se edita aqui
       { name: 'idUsuarioMod', type: sql.Int, value: idUsuarioMod },
       { name: 'idTipoProducto', type: sql.Int, value: idTipoProducto || 0 },
-      { name: 'gasto', type: sql.Bit, value: gasto || false },
-      { name: 'origen', type: sql.Bit, value: origen !== undefined ? origen : false },
+      { name: 'idTalle', type: sql.Int, value: idTalle },
+      { name: 'idColor', type: sql.Int, value: idColor },
       { name: 'activo', type: sql.Bit, value: activo !== undefined ? activo : true },
       { name: 'idImpuesto', type: sql.Int, value: idImpuesto || 0 },
       { name: 'imagenUrl', type: sql.VarChar, value: imagenUrl || '' }

@@ -190,7 +190,6 @@ const Facturacion: React.FC = () => {
           idProducto: det.idProducto,
           nombreMercaderia: det.nombreMercaderia,
           descripcion: det.nombreMercaderia,
-          origen: det.origen,
           unidades: det.cantidad,
           precioUnitario: det.precioUnitario,
           descuento: (det.precioUnitario - det.precioDescuento) * det.cantidad,
@@ -909,7 +908,6 @@ const Facturacion: React.FC = () => {
                     <TableHead>
                       <TableRow>
                         <TableCell>Descripción</TableCell>
-                        <TableCell>Origen</TableCell>
                         <TableCell align="center">Cantidad</TableCell>
                         <TableCell align="right">Precio Unit.</TableCell>
                         <TableCell align="right">Subtotal</TableCell>
@@ -922,7 +920,6 @@ const Facturacion: React.FC = () => {
                       {items.map((item, index) => (
                         <TableRow key={index}>
                           <TableCell>{item.descripcion || item.nombreMercaderia}</TableCell>
-                          <TableCell>{item.origen === 'N' ? 'Nacional' : 'Importado'}</TableCell>
                           <TableCell align='center'>{item.unidades}</TableCell>
                           <TableCell align="right">₲{(item.precioUnitario || item.precio || 0).toLocaleString()}</TableCell>
                           <TableCell align="right">₲{(item.subtotal || 0).toLocaleString()}</TableCell>

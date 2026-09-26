@@ -1,0 +1,42 @@
+name: Deploy Sistema Flo & Co
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+
+    steps:
+      - name: Descargar último código de GitHub
+        uses: actions/checkout@v4
+        with:
+          clean: false
+
+      - name: Detener Servicio de Windows (Para desbloquear archivos dist/)
+        shell: powershell
+        run: |
+          # Verifica si el servicio existe y está corriendo antes de intentar apagarlo
+          $service = Get-Service -Name "AuraChic" -ErrorAction SilentlyContinue
+          if ($service -and $service.Status -eq 'Running') {
+              Stop-Service -Name "AuraChic" -Force
+          }
+
+      - name: Instalar y Compilar Frontend
+        run: |
+          cd client
+          npm install
+          npm run build
+
+      - name: Instalar y Compilar Backend
+        run: |
+          cd server
+          npm install
+          npm run build
+
+      - name: Iniciar Servicio de Windows (NSSM con código nuevo)
+        shell: powershell
+        run: |
+          Start-Service -Name "AuraChic"

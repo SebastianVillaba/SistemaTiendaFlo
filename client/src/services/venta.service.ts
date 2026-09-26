@@ -17,7 +17,6 @@ export interface DetalleVentaTmp {
   idProducto: number;
   codigo: string;
   nombreMercaderia: string;
-  origen: string;
   cantidad: number;
   precioUnitario: number;
   precioDescuento: number;
